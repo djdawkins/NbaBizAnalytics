@@ -25,24 +25,13 @@ hoopshype_salaries(
   assume_player_opt_out = T,
   assume_team_doesnt_exercise = T,
   nest_data = F,
-  return_message = FALSE
+  return_message = TRUE
 )
-df_salaries
+df_salaries = df_salaries[df_salaries['slugSeason'] == '2022-23',]
 ```
-
-
-
-
-```{r salary summary}
-hoops_hype_salary_summary(return_wide = T, return_message = T)
-```
-
-
-
-
 ```{r B Ref stats}
 bref_stats <- bref_players_stats(
-  seasons = 2017:2018,
+  seasons = 2022,
   tables = c("advanced", "totals"),
   include_all_nba = F,
   only_totals = TRUE,
@@ -69,19 +58,27 @@ bref_stats$AV <- (bref_stats$credit**(0.75))/21
 full_tbl <- merge(df_salaries, bref_stats, by = "namePlayer")
 # Get MP & $/MIN
 full_tbl$cash_per_min<- full_tbl$amountContract/full_tbl$minutesTotals
+
+
+mean(na.omit(full_tbl$AV))
 ```
 
 
 ```{r}
-Categories <- cut(full_tbl$cash_per_min, breaks = c(-Inf,6424.32,12848.64,Inf), labels = c("Low","Medium","High"))
+Categories <- cut(full_tbl$AV, breaks = c(-Inf,6.104977,12.209954,Inf), labels = c("Low","Medium","High"))
 Categories <- data.frame(Categories)
-full_tbl$SalaryCatagory <- Categories$Categories
+full_tbl$AVCategory <- Categories$Categories
+full_tbl
 ```
 
 
 ```{r cash_per_min vs AV}
 library(ggplot2)
 ggplot(full_tbl, aes(x=cash_per_min, y=AV, color = groupPosition)) + geom_point()
+```
+```{r}
+library(ggplot2)
+ggplot(full_tbl, aes(x=cash_per_min, y=AV, color = AVCatagory)) + geom_point()
 ```
 
 ```{r gamesPlayed}
@@ -100,7 +97,61 @@ ggplot(data = full_tbl, mapping = aes(x = groupPosition, y = countGames)) +
 
 ```{r cash_per_min vs AV}
 games60_tbl <- filter(full_tbl, countGames >= 60)
-ggplot(games60_tbl, aes(x=cash_per_min, y=AV, color = groupPosition)) + geom_point()
+ggplot(games60_tbl, aes(x=AVCatagory, y=AV, color = AVCatagory)) + geom_boxplot()
+```
+
+```{r}
+
+detect_outliers <- function(inp, na.rm=TRUE) {
+  i.qnt <- quantile(inp, probs=c(.25, .75), na.rm=na.rm)
+  i.max <- 1.5 * IQR(inp, na.rm=na.rm)
+  otp <- inp
+  otp[inp < (i.qnt[1] - i.max)] <- NA
+  otp[inp > (i.qnt[2] + i.max)] <- NA
+  inp[is.na(otp)]
+}
+
+sum(is.na(full_tbl$AVCatagory))
+
+
+#lapply(select(general, -c(groupPosition, slugPosition, slugTeamsBREF)), detect_outliers)
+
+full_tbl$slugTeamBREF <- as.factor(full_tbl$slugTeamBREF)
+full_tbl$slugPosition <- as.factor(full_tbl$slugPosition)
+full_tbl$groupPosition <- as.factor(full_tbl$groupPosition)
+
+full_tbl <- select(full_tbl, -isFinalSeason, -yearSeason, -isHOFPlayer, -nameTeam, -slugSeason.y, -isSeasonCurrent, -isPlayerOption, -countTeamsPlayerSeason, -isTeamOption, -slugSeason.x, -urlPlayerBREF, -urlPlayerThumbnail, -urlPlayerHeadshot, -urlPlayerPhoto, -urlPlayerActionPhoto, -urlHoopsHypePlayer, -urlTeamSalaryHoopsHype, -urlPlayerStats, -slugPlayerSeason, -slugPlayerBREF, -slugTeamsBREF, -idPlayerNBA)
+str(full_tbl)
+```
+```{r}
+split1<- sample(c(rep(0, 0.7 * nrow(full_tbl)), rep(1, 0.3 * nrow(full_tbl))))
+split1
+TrainData <- full_tbl[split1 == 0, ]
+TrainData
+TestData <- full_tbl[split1== 1, ]
+TestData
+```
+```{r}
+
+stpModel=step(lm(data=TrainData, amountContract~.), direction = "forward")
+stpSummary <- summary(stpModel)
+stpSummary 
+```
+```{r}
+model <- lm(amountContract ~ groupPosition + slugPosition + 
+    agePlayer + slugTeamBREF + countGames + minutes + ratioPER + 
+    pctTrueShooting + pct3PRate + pctFTRate + pctORB + pctDRB + 
+    pctTRB + pctAST + pctSTL + pctBLK + pctTOV + pctUSG + ratioOWS + 
+    ratioDWS + ratioWS + ratioWSPer48 + ratioOBPM + ratioDBPM + 
+    ratioBPM + ratioVORP + countGamesStarted + pctFG + pctFG3 + 
+    pctFG2 + pctEFG + pctFT + minutesTotals + fgmTotals + fgaTotals + 
+    fg3mTotals + fg3aTotals + fg2mTotals + fg2aTotals + ftmTotals + 
+    ftaTotals + orbTotals + drbTotals + trbTotals + astTotals + 
+    stlTotals + blkTotals + tovTotals + pfTotals + ptsTotals + 
+    countTeamsPlayerSeasonTotals + cash_per_min + 
+    AVCategory, data = TrainData)
+summary(model)
+
 ```
 
 Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
