@@ -29,6 +29,108 @@ hoopshype_salaries(
 )
 df_salaries = df_salaries[df_salaries['slugSeason'] == '2022-23',]
 ```
+
+```{r 2017 Cohort}
+
+df_drafts <-
+drafts(draft_years = 2017, nest_data = FALSE, return_message = TRUE)
+df_drafts
+
+bref_stats <- bref_players_stats(
+  seasons = 2020:2022,
+  tables = c("advanced", "totals"),
+  include_all_nba = F,
+  only_totals = TRUE,
+  nest_data = FALSE,
+  assign_to_environment = TRUE,
+  widen_data = TRUE,
+  join_data = TRUE,
+  return_message = TRUE
+)
+
+
+cohort2017 <- merge(df_drafts, bref_stats, by = "namePlayer")
+cohort2017
+```
+
+```{r}
+
+# Credit
+cohort2017$credit <- (cohort2017$ptsTotals + cohort2017$trbTotals + cohort2017$astTotals + cohort2017$stlTotals + cohort2017$blkTotals) - (cohort2017$fgaTotals - cohort2017$fgmTotals) - (cohort2017$ftaTotals - cohort2017$ftmTotals) - cohort2017$tovTotals
+# AV
+cohort2017$AV <- (cohort2017$credit**(0.75))/21
+cohort2017$Average_AV <- cohort2017$AV %>% group_by(cohort2017$namePlayer)
+
+
+
+Average_AV_2017 <- group_by(cohort2017, namePlayer)
+Average_AV_2017 <- summarise(Average_AV_2017, Average_AV = mean(AV, na.rm = TRUE), groupPosition)
+Average_AV_2017 <- Average_AV_2017[!duplicated(Average_AV_2017$namePlayer), ]
+
+```
+```{r cash_per_min vs AV}
+library(ggplot2)
+ggplot(Average_AV_2017, aes(x=groupPosition, y=Average_AV)) + geom_point()
+```
+```{r}
+library(ggplot2)
+ggplot(full_tbl, aes(x=cash_per_min, y=AV, color = AVCategory)) + geom_point()
+```
+
+```{r gamesPlayed}
+ggplot(data = full_tbl) +
+  geom_histogram(mapping = aes(x = countGames), binwidth = 0.5)
+```
+
+
+
+```{r gamesPlayed by position}
+ggplot(data = full_tbl, mapping = aes(x = AVCategory, y = minutes)) +
+  geom_boxplot()
+```
+
+
+
+```{r cash_per_min vs AV}
+games60_tbl <- filter(full_tbl, countGames >= 60)
+ggplot(games60_tbl, aes(x=AVCategory, y=AV, color = AVCategory)) + geom_boxplot()
+
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+```{r 2018 Cohort}
+df_drafts <-
+drafts(draft_years = 2016, nest_data = FALSE, return_message = TRUE)
+df_drafts
+
+adv_stats <- bref_players_stats(seasons = 2018:2022, tables = c("advanced", "per_game"))
+adv_stats
+
+cohort2017 <- merge(df_drafts, adv_stats, by = "namePlayer")
+cohort2017
+
+
+
+```
+
 ```{r B Ref stats}
 bref_stats <- bref_players_stats(
   seasons = 2022,
@@ -78,7 +180,7 @@ ggplot(full_tbl, aes(x=cash_per_min, y=AV, color = groupPosition)) + geom_point(
 ```
 ```{r}
 library(ggplot2)
-ggplot(full_tbl, aes(x=cash_per_min, y=AV, color = AVCatagory)) + geom_point()
+ggplot(full_tbl, aes(x=cash_per_min, y=AV, color = AVCategory)) + geom_point()
 ```
 
 ```{r gamesPlayed}
@@ -89,7 +191,7 @@ ggplot(data = full_tbl) +
 
 
 ```{r gamesPlayed by position}
-ggplot(data = full_tbl, mapping = aes(x = groupPosition, y = countGames)) +
+ggplot(data = full_tbl, mapping = aes(x = AVCategory, y = minutes)) +
   geom_boxplot()
 ```
 
@@ -97,7 +199,7 @@ ggplot(data = full_tbl, mapping = aes(x = groupPosition, y = countGames)) +
 
 ```{r cash_per_min vs AV}
 games60_tbl <- filter(full_tbl, countGames >= 60)
-ggplot(games60_tbl, aes(x=AVCatagory, y=AV, color = AVCatagory)) + geom_boxplot()
+ggplot(games60_tbl, aes(x=AVCategory, y=AV, color = AVCategory)) + geom_boxplot()
 ```
 
 ```{r}
@@ -122,6 +224,8 @@ full_tbl$groupPosition <- as.factor(full_tbl$groupPosition)
 
 full_tbl <- select(full_tbl, -isFinalSeason, -yearSeason, -isHOFPlayer, -nameTeam, -slugSeason.y, -isSeasonCurrent, -isPlayerOption, -countTeamsPlayerSeason, -isTeamOption, -slugSeason.x, -urlPlayerBREF, -urlPlayerThumbnail, -urlPlayerHeadshot, -urlPlayerPhoto, -urlPlayerActionPhoto, -urlHoopsHypePlayer, -urlTeamSalaryHoopsHype, -urlPlayerStats, -slugPlayerSeason, -slugPlayerBREF, -slugTeamsBREF, -idPlayerNBA)
 str(full_tbl)
+
+sum(is.na(full_tbl$amountContract))
 ```
 ```{r}
 split1<- sample(c(rep(0, 0.7 * nrow(full_tbl)), rep(1, 0.3 * nrow(full_tbl))))
@@ -133,25 +237,65 @@ TestData
 ```
 ```{r}
 
-stpModel=step(lm(data=TrainData, amountContract~.), direction = "forward")
+stpModel=step(lm(data=TrainData, AVCategory~.), direction = "backward")
 stpSummary <- summary(stpModel)
 stpSummary 
 ```
 ```{r}
-model <- lm(amountContract ~ groupPosition + slugPosition + 
-    agePlayer + slugTeamBREF + countGames + minutes + ratioPER + 
-    pctTrueShooting + pct3PRate + pctFTRate + pctORB + pctDRB + 
-    pctTRB + pctAST + pctSTL + pctBLK + pctTOV + pctUSG + ratioOWS + 
-    ratioDWS + ratioWS + ratioWSPer48 + ratioOBPM + ratioDBPM + 
-    ratioBPM + ratioVORP + countGamesStarted + pctFG + pctFG3 + 
-    pctFG2 + pctEFG + pctFT + minutesTotals + fgmTotals + fgaTotals + 
-    fg3mTotals + fg3aTotals + fg2mTotals + fg2aTotals + ftmTotals + 
-    ftaTotals + orbTotals + drbTotals + trbTotals + astTotals + 
-    stlTotals + blkTotals + tovTotals + pfTotals + ptsTotals + 
-    countTeamsPlayerSeasonTotals + cash_per_min + 
-    AVCategory, data = TrainData)
-summary(model)
+#model<- glm(amountContract ~ groupPosition + 
+#    agePlayer+ countGames + minutes + ratioPER + 
+##    pctTrueShooting + pct3PRate + pctFTRate + pctORB + pctDRB + 
+#    pctTRB + pctAST + pctSTL + pctBLK + pctTOV + pctUSG + ratioOWS + 
+#    ratioDWS + ratioWS + ratioWSPer48 + ratioOBPM + ratioDBPM + 
+#    ratioBPM + ratioVORP + countGamesStarted + pctFG + pctFG3 + 
+#    pctFG2 + pctEFG + pctFT + fgmTotals + fgaTotals + 
+#    fg3mTotals + fg3aTotals + ftmTotals + 
+#    ftaTotals + orbTotals + drbTotals + astTotals + 
+#    stlTotals + blkTotals + tovTotals + pfTotals + cash_per_min + 
+#    AVCategory, data = TrainData)
+#summary(model)
 
+
+model2 <- glm(AVCategory~. data = TrainData, family = 'binomial')  
+summary(model2)
+
+p1 <- predict(model2, TrainData, type = 'response')
+head(p1)
+
+pre1<-ifelse(p1 > 0.5, 1, 0)
+table<-table(Prediction = pre1, 
+             Actual = TrainData$AVCategory) 
+table
 ```
+```{r}
+PredData <- select(TestData, c(groupPosition , agePlayer , countGames , 
+    minutes , ratioPER , pctTrueShooting , pct3PRate , pctFTRate , 
+    pctORB , pctDRB , pctTRB , pctAST , pctSTL , pctBLK , pctTOV , 
+    pctUSG , ratioOWS , ratioDWS , ratioWS , ratioWSPer48 , ratioOBPM , 
+    ratioDBPM , ratioBPM , ratioVORP , countGamesStarted , pctFG , 
+    pctFG3 , pctFG2 , pctEFG , pctFT , fgmTotals , fgaTotals , 
+    fg3mTotals , fg3aTotals , ftmTotals , ftaTotals , orbTotals , 
+    drbTotals , astTotals , stlTotals , blkTotals , 
+    tovTotals , pfTotals ,cash_per_min , AVCategory))
 
+head(PredData)
+```
+```{r}
+pred_sl <- predict(model2, PredData)
+pred_sl
+
+pred_sl <- predict(model, PredData)
+pred_sl
+
+TestData <- cbind(TestData, pred_sl)
+TestData <- mutate(TestData, Accuracy = (1-(abs(amountContract-na.omit(pred_sl))/amountContract))*100)
+TestData
+
+summary(pred_sl)
+```
+```{r}
+avgacc <- mean(na.omit(TestData$Accuracy))
+avgacc
+TestData$Accuracy
+```
 Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
