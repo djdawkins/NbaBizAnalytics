@@ -15,92 +15,96 @@ suppressPackageStartupMessages(library(tidyverse))
 
 
 
-```{r Salary, echo = FALSE}
-library(dplyr)
-df_salaries <-
-hoopshype_salaries(
-  teams = NULL,
-  all_teams = TRUE,
-  assume_player_opt_out = T,
-  assume_team_doesnt_exercise = T,
-  nest_data = F,
-  return_message = FALSE
-)
-df_salaries
-```
+```{r cohort creation function}
+get_cohort <- function(cohort_year, season_range){
+  
+  # Get draft data
+  df_drafts <- drafts(draft_years = cohort_year, nest_data = FALSE, return_message = FALSE)
+  
+  # Get bref data
+  bref_stats <- bref_players_stats(
+    seasons = season_range,
+    tables = c("advanced", "totals"),
+    include_all_nba = F,
+    only_totals = TRUE,
+    nest_data = FALSE,
+    assign_to_environment = TRUE,
+    widen_data = TRUE,
+    join_data = TRUE,
+    return_message = FALSE
+  )
+  
+  # Merge draft and bref data
+  cohort_tbl <- merge(df_drafts, bref_stats, by = "namePlayer")
+  # Add column for cohort year
+  cohort_tbl$year <- cohort_year
 
-
-
-
-```{r salary summary}
-hoops_hype_salary_summary(return_wide = T, return_message = T)
-```
-
-
-
-
-```{r B Ref stats}
-bref_stats <- bref_players_stats(
-  seasons = 2017:2018,
-  tables = c("advanced", "totals"),
-  include_all_nba = F,
-  only_totals = TRUE,
-  nest_data = FALSE,
-  assign_to_environment = TRUE,
-  widen_data = TRUE,
-  join_data = TRUE,
-  return_message = TRUE
-)
-```
-
-
-
-```{r Get Credit & AV }
-# Credit
-bref_stats$credit <- (bref_stats$ptsTotals + bref_stats$trbTotals + bref_stats$astTotals + bref_stats$stlTotals + bref_stats$blkTotals) - (bref_stats$fgaTotals - bref_stats$fgmTotals) - (bref_stats$ftaTotals - bref_stats$ftmTotals) - bref_stats$tovTotals
-
-# AV
-bref_stats$AV <- (bref_stats$credit**(0.75))/21
+  # Credit
+  cohort_tbl$credit <- (cohort_tbl$ptsTotals + cohort_tbl$trbTotals + cohort_tbl$astTotals + cohort_tbl$stlTotals + cohort_tbl$blkTotals) - (cohort_tbl$fgaTotals - cohort_tbl$fgmTotals) - (cohort_tbl$ftaTotals - cohort_tbl$ftmTotals) - cohort_tbl$tovTotals
+  
+  # AV
+  cohort_tbl$AV <- (cohort_tbl$credit**(0.75))/21
+  
+  # Group by player
+  Average_AV <- group_by(cohort_tbl, namePlayer)
+  # Summarise AV mean, include groupPosition and year columns as-is
+  Average_AV <- summarise(Average_AV, Average_AV = mean(AV, na.rm = TRUE), groupPosition, year)
+  # Removing duplicate rows
+  Average_AV <- Average_AV[!duplicated(Average_AV$namePlayer), ]
+  
+  # Return Average AV tibble
+  return(Average_AV)
+}
 
 ```
 
 
 
-```{r Get $/MIN}
+```{r Get Cohorts 2010 - 2017}
+cohort2017 <- get_cohort(2017, 2020:2022)
+cohort2016 <- get_cohort(2016, 2019:2021)
+cohort2015 <- get_cohort(2015, 2018:2020)
+cohort2014 <- get_cohort(2014, 2017:2019)
+cohort2013 <- get_cohort(2013, 2016:2018)
+cohort2012 <- get_cohort(2012, 2015:2017)
+cohort2011 <- get_cohort(2011, 2014:2016)
+cohort2010 <- get_cohort(2010, 2013:2015)
+```
+
+```{r all cohorts}
+# Combine all cohorts
+all_cohorts <- bind_rows(cohort2017, cohort2016, cohort2015, cohort2014, cohort2013, cohort2012, cohort2011, cohort2010)
+```
+
+
+
+
+
+```{r AV by position}
+
+ggplot(all_cohorts, aes(x=groupPosition, y=Average_AV)) + geom_point()
+```
+
+
+
+```{r Get mean for all cohorts}
 full_tbl <- merge(df_salaries, bref_stats, by = "namePlayer")
 
-# Get MP & $/MIN
-full_tbl$cash_per_min<- full_tbl$amountContract/full_tbl$minutesTotals
+print(mean(na.omit(all_cohorts$Average_AV)))
+print(mean(na.omit(all_cohorts$Average_AV))*2)
 
 ```
 
 
-
-
-```{r cash_per_min vs AV}
-library(ggplot2)
-
-ggplot(full_tbl, aes(x=cash_per_min, y=AV, color = groupPosition)) + geom_point()
-```
-
-```{r gamesPlayed}
-ggplot(data = full_tbl) +
-  geom_histogram(mapping = aes(x = countGames), binwidth = 0.5)
+```{r Label AV values}
+Categories <- cut(all_cohorts$Average_AV, breaks = c(-Inf,5.313925,10.62785,Inf), labels = c("Low","Medium","High"))
+Categories <- data.frame(Categories)
+all_cohorts$AVCategory <- Categories$Categories
+all_cohorts
 ```
 
 
-
-```{r gamesPlayed by position}
-ggplot(data = full_tbl, mapping = aes(x = groupPosition, y = countGames)) +
-  geom_boxplot()
+```{r all cohorts category count, fill by group position}
+ggplot(all_cohorts, aes(x=AVCategory, fill=groupPosition)) + geom_bar()
 ```
-
-
-
-```{r cash_per_min vs AV}
-
-games60_tbl <- filter(full_tbl, countGames >= 60)
-ggplot(games60_tbl, aes(x=cash_per_min, y=AV, color = groupPosition)) + geom_point()
-```
-
 
