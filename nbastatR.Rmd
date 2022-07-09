@@ -48,9 +48,12 @@ get_cohort <- function(cohort_year, season_range){
   # Group by player
   Average_AV <- group_by(cohort_tbl, namePlayer)
   # Summarise AV mean, include groupPosition and year columns as-is
-  Average_AV <- summarise(Average_AV, Average_AV = mean(AV, na.rm = TRUE), groupPosition, year)
+  Average_AV <- summarise(Average_AV, Average_AV = mean(AV, na.rm = TRUE), groupPosition, year, nameOrganizationFrom, typeOrganizationFrom)
   # Removing duplicate rows
   Average_AV <- Average_AV[!duplicated(Average_AV$namePlayer), ]
+  
+  
+  Average_AV <- Average_AV %>% filter(typeOrganizationFrom == "College/University")
   
   # Return Average AV tibble
   return(Average_AV)
@@ -107,4 +110,27 @@ all_cohorts
 ```{r all cohorts category count, fill by group position}
 ggplot(all_cohorts, aes(x=AVCategory, fill=groupPosition)) + geom_bar()
 ```
+```{r Get unique colleges from all cohort}
+
+distinct_df <- unique(all_cohorts$nameOrganizationFrom)
+view(distinct_df)
+
+```
+
+
+
+```{r}
+library(bigballR)
+schedule <- get_team_schedule(season = "2016-17", team.name = "Gonzaga")
+
+# Get play by play for all games played so far in season
+play_by_play <- get_play_by_play(schedule$Game_ID)
+
+# Generate all lineups and stats from the play by play
+lineups <- get_player_stats(play_by_play_data = play_by_play, multi.games=TRUE)
+lineups
+
+```
+
+
 
