@@ -112,24 +112,51 @@ ggplot(all_cohorts, aes(x=AVCategory, fill=groupPosition)) + geom_bar()
 ```
 ```{r Get unique colleges from all cohort}
 
-distinct_df <- unique(all_cohorts$nameOrganizationFrom)
-view(distinct_df)
+# distinct_schools <- unique(all_cohorts$nameOrganizationFrom)
+# 
+# distinct_schools <- as_tibble(distinct_schools) 
+# distinct_schools <- rename(distinct_schools, Team = value)
+# 
+# distinct_schools
+
+# test <- full_join(distinct_schools, school_id_tbl, by = "Team", keep = TRUE)
+# write_excel_csv(test, "school_tbl_.csv")
 
 ```
 
 
 
-```{r}
+```{r College data merge prep}
+# Manually mapped unmatched schools and saved it to school_tbl.csv
+school_id_tbl <- read_csv("school_tbl.csv")
+
+# Join all cohorts with the school id tbl
+full_tbl <- full_join(all_cohorts, school_id_tbl, by = "nameOrganizationFrom")
+
+# Adjust namePlayer col for the college data merge
+full_tbl <- full_tbl %>% mutate(namePlayer = toupper(namePlayer))
+full_tbl <- full_tbl %>% mutate(namePlayer = str_replace_all(namePlayer, fixed(" "), "."))
+
+full_tbl
+
+```
+
+
+
+
+```{r test ncca stat pull}
 library(bigballR)
-schedule <- get_team_schedule(season = "2016-17", team.name = "Gonzaga")
+
+team = "Kentucky"
+schedule <- get_team_schedule(season = "2016-17", team.name = team)
 
 # Get play by play for all games played so far in season
 play_by_play <- get_play_by_play(schedule$Game_ID)
 
 # Generate all lineups and stats from the play by play
 lineups <- get_player_stats(play_by_play_data = play_by_play, multi.games=TRUE)
+lineups <- lineups %>% filter(Team == team)
 lineups
-
 ```
 
 
