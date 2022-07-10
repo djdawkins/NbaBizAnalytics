@@ -133,29 +133,86 @@ school_id_tbl <- read_csv("school_tbl.csv")
 # Join all cohorts with the school id tbl
 full_tbl <- full_join(all_cohorts, school_id_tbl, by = "nameOrganizationFrom")
 
-# Adjust namePlayer col for the college data merge
-full_tbl <- full_tbl %>% mutate(namePlayer = toupper(namePlayer))
-full_tbl <- full_tbl %>% mutate(namePlayer = str_replace_all(namePlayer, fixed(" "), "."))
+# # Adjust namePlayer col for the college data merge
+# full_tbl <- full_tbl %>% mutate(namePlayer = toupper(namePlayer))
+# full_tbl <- full_tbl %>% mutate(namePlayer = str_replace_all(namePlayer, fixed(" "), "."))
 
-full_tbl
+# Group by player
+yr_team_gb <- group_by(full_tbl, year, Team)
+# Summarise AV mean, include groupPosition and year columns as-is
+yr_team_gb_tbl <- summarise(yr_team_gb, year, Team)
+# Removing duplicate rows
+yr_team_tbl <- yr_team_gb_tbl[!duplicated(yr_team_gb_tbl), ]
 
+yr_team_tbl <- as_tibble(yr_team_tbl)
+yr_team_tbl <- yr_team_tbl %>% filter(Team !="Butler")
+
+yr_team_tbl
 ```
 
 
+
+```{r}
+library(hash)
+lineups_hash <- hash() 
+
+
+# get_schedule <- function(year, team){
+for(i in 1:nrow(yr_team_tbl)){
+  
+  year <- yr_team_tbl[i,"year"]
+  year <- year %>% getElement("year")
+  year <- paste0(as.character(year-1), "-", str_sub(as.character(year), start= -2))
+  
+  team <- yr_team_tbl[i,"Team"]
+  team <- team %>% getElement("Team") 
+  
+  
+  # print(class(team %>% getElement("Team")))
+  # print(year)
+  # Get schedule data
+  schedule <- get_team_schedule(season = year, team.name = team)
+  
+  # Get play by play for all games played so far in season
+  play_by_play <- get_play_by_play(schedule$Game_ID)
+  
+  # Generate all lineups and stats from the play by play
+  lineups <- get_player_stats(play_by_play_data = play_by_play, multi.games=TRUE)
+  lineups <- lineups %>% filter(Team == team)
+  lineups$year <- year
+
+  # Return lineups tibble
+  # return(lineups)
+  # bind_rows(lineups)
+  # lineups_dict
+  
+  year_team <- paste0(year, team)
+  # set values
+  lineups_hash[[year_team]] <- lineups
+  lineups_hash[[year_team]]
+}
+
+# lineups_hash
+
+```
+```{r}
+play_by_play_
+```
 
 
 ```{r test ncca stat pull}
 library(bigballR)
 
-team = "Kentucky"
-schedule <- get_team_schedule(season = "2016-17", team.name = team)
+team = "Butler"
+schedule <- get_team_schedule(season = "2009-10", team.name = team)
 
 # Get play by play for all games played so far in season
 play_by_play <- get_play_by_play(schedule$Game_ID)
 
 # Generate all lineups and stats from the play by play
-lineups <- get_player_stats(play_by_play_data = play_by_play, multi.games=TRUE)
+lineups <- get_player_stats(play_by_play_data = play_by_play, multi.games=FALSE)
 lineups <- lineups %>% filter(Team == team)
+lineups$year <- year
 lineups
 ```
 
