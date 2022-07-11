@@ -145,7 +145,7 @@ yr_team_gb_tbl <- summarise(yr_team_gb, year, Team)
 yr_team_tbl <- yr_team_gb_tbl[!duplicated(yr_team_gb_tbl), ]
 
 yr_team_tbl <- as_tibble(yr_team_tbl)
-yr_team_tbl <- yr_team_tbl %>% filter(Team !="Butler")
+yr_team_tbl <- yr_team_tbl %>% filter(year !=2010)
 
 yr_team_tbl
 ```
@@ -167,6 +167,8 @@ for(i in 1:nrow(yr_team_tbl)){
   team <- yr_team_tbl[i,"Team"]
   team <- team %>% getElement("Team") 
   
+  year_team <- paste0(year, team)
+  print(year_team)
   
   # print(class(team %>% getElement("Team")))
   # print(year)
@@ -176,6 +178,9 @@ for(i in 1:nrow(yr_team_tbl)){
   # Get play by play for all games played so far in season
   play_by_play <- get_play_by_play(schedule$Game_ID)
   
+  # play_by_play$isTransition <- NA
+  # play_by_play$isGarbageTime <- NA
+
   # Generate all lineups and stats from the play by play
   lineups <- get_player_stats(play_by_play_data = play_by_play, multi.games=TRUE)
   lineups <- lineups %>% filter(Team == team)
@@ -186,15 +191,19 @@ for(i in 1:nrow(yr_team_tbl)){
   # bind_rows(lineups)
   # lineups_dict
   
-  year_team <- paste0(year, team)
+
   # set values
   lineups_hash[[year_team]] <- lineups
-  lineups_hash[[year_team]]
+  print(lineups_hash[[year_team]])
 }
 
-# lineups_hash
+
 
 ```
+```{r}
+play_by_play
+```
+
 ```{r}
 play_by_play_
 ```
@@ -204,10 +213,13 @@ play_by_play_
 library(bigballR)
 
 team = "Butler"
-schedule <- get_team_schedule(season = "2009-10", team.name = team)
+schedule <- get_team_schedule(season = "2010-11", team.name = team)
 
 # Get play by play for all games played so far in season
 play_by_play <- get_play_by_play(schedule$Game_ID)
+
+# play_by_play$isTransition <- NA
+# play_by_play$isGarbageTime <- NA
 
 # Generate all lineups and stats from the play by play
 lineups <- get_player_stats(play_by_play_data = play_by_play, multi.games=FALSE)
