@@ -71,12 +71,12 @@ cohort2014 <- get_cohort(2014, 2017:2019)
 cohort2013 <- get_cohort(2013, 2016:2018)
 cohort2012 <- get_cohort(2012, 2015:2017)
 cohort2011 <- get_cohort(2011, 2014:2016)
-cohort2010 <- get_cohort(2010, 2013:2015)
+# cohort2010 <- get_cohort(2010, 2013:2015)
 ```
 
 ```{r all cohorts}
 # Combine all cohorts
-all_cohorts <- bind_rows(cohort2017, cohort2016, cohort2015, cohort2014, cohort2013, cohort2012, cohort2011, cohort2010)
+all_cohorts <- bind_rows(cohort2017, cohort2016, cohort2015, cohort2014, cohort2013, cohort2012, cohort2011)
 ```
 
 
@@ -131,14 +131,10 @@ ggplot(all_cohorts, aes(x=AVCategory, fill=groupPosition)) + geom_bar()
 school_id_tbl <- read_csv("school_tbl.csv")
 
 # Join all cohorts with the school id tbl
-full_tbl <- full_join(all_cohorts, school_id_tbl, by = "nameOrganizationFrom")
-
-# # Adjust namePlayer col for the college data merge
-# full_tbl <- full_tbl %>% mutate(namePlayer = toupper(namePlayer))
-# full_tbl <- full_tbl %>% mutate(namePlayer = str_replace_all(namePlayer, fixed(" "), "."))
+all_cohorts <- full_join(all_cohorts, school_id_tbl, by = "nameOrganizationFrom")
 
 # Group by player
-yr_team_gb <- group_by(full_tbl, year, Team)
+yr_team_gb <- group_by(all_cohorts, year, Team)
 # Summarise AV mean, include groupPosition and year columns as-is
 yr_team_gb_tbl <- summarise(yr_team_gb, year, Team)
 # Removing duplicate rows
@@ -160,7 +156,7 @@ yr_team_tbl
 ```{r Get college data and save to a hash}
 library(hash)
 
-# # Create lineups_hash
+# # Create year_team
 # lineups_hash <- hash()
 
 # Loop through yr team tibble
@@ -231,3 +227,198 @@ library(hash)
 # lineups$year <- year
 # lineups
 ```
+
+
+
+```{r Read all lineups CSV}
+college_data <- read_json("all_lineups.json")
+```
+
+
+
+```{r Get college names}
+college_names <- college_data[[1]][[1]]
+college_names <- do.call(c, college_names)
+
+college_names_tbl <- tibble(namePlayer = unlist(college_names))
+
+
+
+college_names_tbl
+# address periods and JR in front of strings and add 3 letter row
+```
+
+```{r Get NBA names}
+
+# Adjust namePlayer col for the college data merge
+nba_tbl <- all_cohorts %>% select(namePlayer, Average_AV, AVCategory, Team, groupPosition, year)
+
+# Create new column for playerName edits
+nba_tbl <- nba_tbl %>% mutate(namePlayerCol = namePlayer)
+
+nba_tbl <- nba_tbl %>% mutate(namePlayerCol = str_replace_all(namePlayerCol, fixed("'"), ""))
+nba_tbl <- nba_tbl %>% mutate(namePlayerCol = str_replace_all(namePlayerCol, fixed("-"), ""))
+nba_tbl <- nba_tbl %>% mutate(namePlayerCol = str_replace_all(namePlayerCol, fixed("."), ""))
+nba_tbl <- nba_tbl %>% mutate(namePlayerCol = str_replace_all(namePlayerCol, fixed(" "), "."))
+nba_tbl <- nba_tbl %>% mutate(namePlayerCol = toupper(namePlayerCol))
+
+nba_tbl <- nba_tbl %>% mutate(namePlayerCol_2 = str_replace_all(namePlayerCol, fixed(".SR"), ""))
+nba_tbl <- nba_tbl %>% mutate(namePlayerCol_2 = str_replace_all(namePlayerCol_2, fixed(".JR"), ""))
+
+nba_tbl <- nba_tbl %>% mutate(namePlayerCol_2 = str_replace_all(namePlayerCol_2, fixed(".III"), ""))
+nba_tbl <- nba_tbl %>% mutate(namePlayerCol_2 = str_replace_all(namePlayerCol_2, fixed(".II"), ""))
+nba_tbl <- nba_tbl %>% mutate(namePlayerCol_2 = str_replace_all(namePlayerCol_2, fixed(".IV"), ""))
+
+# Loop through yr team tibble
+for(i in 1:nrow(nba_tbl)){
+
+  # Get year value
+  year <- nba_tbl[i,"year"]
+  year <- year %>% getElement("year")
+  # Convert year value to a char and reformat to 201X-XX
+  year <- paste0(as.character(year-1), "-", str_sub(as.character(year), start= -2))
+  
+  # Get team value
+  team <- nba_tbl[i,"Team"]
+  team <- team %>% getElement("Team")
+
+  # Create year_team value
+  year_team <- paste0(year, team)
+  
+  # Make name player derivative
+  namePlayerCol <- nba_tbl[i,"namePlayerCol"]
+  namePlayerCol <- namePlayerCol %>% getElement("namePlayerCol")
+
+  # namePlayerCol <- namePlayerCol %>% getElement("namePlayerCol")
+  # 
+  # # print(namePlayerCol)
+
+  nba_tbl[i, "year_team"] <- year_team
+  nba_tbl[i, "fn3ltr"] <- str_sub(as.character(namePlayerCol), end = 3)
+
+}
+
+nba_tbl
+
+
+
+```
+
+```{r}
+
+nba_college_tbl <- left_join(nba_by_year_team, yr_college_tbl, by = c("namePlayerCol" = "Player"))
+
+```
+
+
+```{r}
+# Loop through nba names tbl, use year team map to find players stats
+yr_college_list <- list(keys(lineups_hash))
+
+datalist = list()
+for(i in 1:length(unlist(yr_college_list))){
+  
+  yr_college <- yr_college_list[[1]][i]
+  yr_college_tbl <- lineups_hash[[yr_college]]
+  nba_by_year_team <- nba_tbl %>% filter(year_team == yr_college)
+  nba_college_merge <- left_join(nba_by_year_team, yr_college_tbl, by = c("namePlayerCol" = "Player"))
+  
+  datalist[[i]] <- nba_college_merge # add it to your list
+}
+
+nba_college_tbl = do.call(rbind, datalist)
+nba_college_tbl
+
+```
+
+
+
+```{r}
+
+round1_nan_tbl <- nba_college_tbl[is.na(nba_college_tbl$GP),]
+
+round1_nan_tbl <- round1_nan_tbl %>% select(c(1:10)) 
+
+round1_nan_tbl
+
+```
+
+
+
+
+
+```{r}
+
+datalist = list()
+round1_nan_list <- list(round1_nan_tbl$year_team)
+
+for(i in 1:length(unlist(round1_nan_list))){
+  
+  yr_college <- round1_nan_list[[1]][i]
+  yr_college_tbl <- lineups_hash[[yr_college]]
+  nba_by_year_team <- round1_nan_tbl %>% filter(year_team == yr_college)
+  nba_college_merge <- left_join(nba_by_year_team, yr_college_tbl, by = c("namePlayerCol_2" = "Player"))
+  
+  datalist[[i]] <- nba_college_merge # add it to your list
+}
+
+round1_nan_tbl_fill = do.call(rbind, datalist)
+round1_nan_tbl_fill
+```
+
+
+
+```{r}
+round2_nan_tbl <- round1_nan_tbl_fill[is.na(round1_nan_tbl_fill$GP),]
+round2_nan_tbl <- round2_nan_tbl %>% select(c(1:10)) 
+
+round2_nan_tbl
+```
+
+
+```{r}
+datalist = list()
+round2_nan_list <- list(round2_nan_tbl$year_team)
+
+for(i in 1:length(unlist(round2_nan_list))){
+  
+  yr_college <- round2_nan_list[[1]][i]
+  yr_college_tbl <- lineups_hash[[yr_college]]
+  yr_college_tbl <- yr_college_tbl %>% separate(Player, c("firstNameCol", "lastNameCol"))
+  
+  nba_by_year_team <- round2_nan_tbl %>% filter(year_team == yr_college)
+  
+  nba_by_year_team <- nba_by_year_team %>% separate(namePlayerCol_2, c("firstNameNba", "lastNameNba"))
+  
+  nba_college_merge <- left_join(nba_by_year_team, yr_college_tbl, by = c("lastNameNba" = "lastNameCol"))
+  
+  datalist[[i]] <- nba_college_merge # add it to your list
+}
+
+round2_nan_tbl_fill = do.call(rbind, datalist)
+round2_nan_tbl_fill
+```
+
+
+
+```{r}
+
+og_filled <- nba_college_tbl[!is.na(nba_college_tbl$GP),]
+round1_filled <- round1_nan_tbl_fill[!is.na(round1_nan_tbl_fill$GP),]
+round2_filled <- round2_nan_tbl_fill[!is.na(round2_nan_tbl_fill$GP),]
+
+datalist = list(og_filled, round1_filled, round2_filled)
+final_tbl = do.call(rbind, datalist)
+
+# Drop columns Team.y & year.y
+final_tbl <- as_tibble(final_tbl) %>% select(-c(Team.y, year.y))
+
+# Renam columns Team.x & year.x
+final_tbl <- final_tbl %>% rename(college_team = Team.x, college_year = year.x)
+
+write_excel_csv(final_tbl, "final_tbl.csv")
+final_tbl
+```
+
+
+
