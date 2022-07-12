@@ -144,89 +144,90 @@ yr_team_gb_tbl <- summarise(yr_team_gb, year, Team)
 # Removing duplicate rows
 yr_team_tbl <- yr_team_gb_tbl[!duplicated(yr_team_gb_tbl), ]
 
+# Convert to tibble
 yr_team_tbl <- as_tibble(yr_team_tbl)
+
+# Remove 2010 data becasue api doesnt work for the 2010
 yr_team_tbl <- yr_team_tbl %>% filter(year !=2010)
 
+# capitalized the "C" in UConn
+yr_team_tbl <- yr_team_tbl %>% mutate(Team = str_replace_all(Team, fixed("Uconn"), "UConn"))
 yr_team_tbl
 ```
 
 
 
-```{r}
+```{r Get college data and save to a hash}
 library(hash)
-lineups_hash <- hash() 
 
+# # Create lineups_hash
+# lineups_hash <- hash()
 
-# get_schedule <- function(year, team){
-for(i in 1:nrow(yr_team_tbl)){
-  
-  year <- yr_team_tbl[i,"year"]
-  year <- year %>% getElement("year")
-  year <- paste0(as.character(year-1), "-", str_sub(as.character(year), start= -2))
-  
-  team <- yr_team_tbl[i,"Team"]
-  team <- team %>% getElement("Team") 
-  
-  year_team <- paste0(year, team)
-  print(year_team)
-  
-  # print(class(team %>% getElement("Team")))
-  # print(year)
-  # Get schedule data
-  schedule <- get_team_schedule(season = year, team.name = team)
-  
-  # Get play by play for all games played so far in season
-  play_by_play <- get_play_by_play(schedule$Game_ID)
-  
-  # play_by_play$isTransition <- NA
-  # play_by_play$isGarbageTime <- NA
-
-  # Generate all lineups and stats from the play by play
-  lineups <- get_player_stats(play_by_play_data = play_by_play, multi.games=TRUE)
-  lineups <- lineups %>% filter(Team == team)
-  lineups$year <- year
-
-  # Return lineups tibble
-  # return(lineups)
-  # bind_rows(lineups)
-  # lineups_dict
-  
-
-  # set values
-  lineups_hash[[year_team]] <- lineups
-  print(lineups_hash[[year_team]])
-}
+# Loop through yr team tibble
+# for(i in 1:nrow(yr_team_tbl)){
+#   
+#   # Get year value
+#   year <- yr_team_tbl[i,"year"]
+#   year <- year %>% getElement("year")
+#   # Convert year value to a char and reformat to 201X-XX
+#   year <- paste0(as.character(year-1), "-", str_sub(as.character(year), start= -2))
+#   
+#   # GEt team value
+#   team <- yr_team_tbl[i,"Team"]
+#   team <- team %>% getElement("Team")
+#   
+#   # Create year_team value
+#   year_team <- paste0(year, team)
+#   print(year_team)
+#   
+#   # Get schedule data
+#   schedule <- get_team_schedule(season = year, team.name = team)
+#   
+#   # Get play by play for all games played so far in season
+#   play_by_play <- get_play_by_play(schedule$Game_ID)
+# 
+#   # Generate all lineups and stats from the play by play
+#   lineups <- get_player_stats(play_by_play_data = play_by_play, multi.games=TRUE)
+#   
+#   # Filter on Team
+#   lineups <- lineups %>% filter(Team == team)
+#   # Add year column
+#   lineups$year <- year
+#   
+#   # Set hash key and save lineups tibble
+#   lineups_hash[[year_team]] <- lineups
+# 
+# }
 
 
 
 ```
-```{r}
-play_by_play
-```
-
-```{r}
-play_by_play_
-```
-
-
-```{r test ncca stat pull}
-library(bigballR)
-
-team = "Butler"
-schedule <- get_team_schedule(season = "2010-11", team.name = team)
-
-# Get play by play for all games played so far in season
-play_by_play <- get_play_by_play(schedule$Game_ID)
-
-# play_by_play$isTransition <- NA
-# play_by_play$isGarbageTime <- NA
-
-# Generate all lineups and stats from the play by play
-lineups <- get_player_stats(play_by_play_data = play_by_play, multi.games=FALSE)
-lineups <- lineups %>% filter(Team == team)
-lineups$year <- year
-lineups
+```{r save Lineups to JSON}
+# library(jsonlite)
+# 
+# # Convert lineups hash to list
+# lineups_list <- list(values(lineups_hash))
+# # Convert list to JSON
+# lineups_json = toJSON(lineups_list, pretty = TRUE, auto_unbox = TRUE)
+# # Write lineups_json to json file named all_lineups
+# write(lineups_json, "all_lineups_.json")
 ```
 
 
 
+
+```{r test bigballR ncca stat pull}
+# library(bigballR)
+# 
+# team = "UConn"
+# schedule <- get_team_schedule(season = "2010-11", team.name = team)
+# 
+# # Get play by play for all games played so far in season
+# play_by_play <- get_play_by_play(schedule$Game_ID)
+# 
+# # Generate all lineups and stats from the play by play
+# lineups <- get_player_stats(play_by_play_data = play_by_play, multi.games=FALSE)
+# lineups <- lineups %>% filter(Team == team)
+# lineups$year <- year
+# lineups
+```
