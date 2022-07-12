@@ -253,7 +253,7 @@ college_names_tbl
 # Adjust namePlayer col for the college data merge
 nba_tbl <- all_cohorts %>% select(namePlayer, Average_AV, AVCategory, Team, groupPosition, year)
 
-# Create new column for playerName edits
+# Create namePlayerCol column for playerName edits
 nba_tbl <- nba_tbl %>% mutate(namePlayerCol = namePlayer)
 
 nba_tbl <- nba_tbl %>% mutate(namePlayerCol = str_replace_all(namePlayerCol, fixed("'"), ""))
@@ -262,6 +262,7 @@ nba_tbl <- nba_tbl %>% mutate(namePlayerCol = str_replace_all(namePlayerCol, fix
 nba_tbl <- nba_tbl %>% mutate(namePlayerCol = str_replace_all(namePlayerCol, fixed(" "), "."))
 nba_tbl <- nba_tbl %>% mutate(namePlayerCol = toupper(namePlayerCol))
 
+# Create namePlayerCol_2 column, then remove suffixes from names
 nba_tbl <- nba_tbl %>% mutate(namePlayerCol_2 = str_replace_all(namePlayerCol, fixed(".SR"), ""))
 nba_tbl <- nba_tbl %>% mutate(namePlayerCol_2 = str_replace_all(namePlayerCol_2, fixed(".JR"), ""))
 
@@ -289,12 +290,8 @@ for(i in 1:nrow(nba_tbl)){
   namePlayerCol <- nba_tbl[i,"namePlayerCol"]
   namePlayerCol <- namePlayerCol %>% getElement("namePlayerCol")
 
-  # namePlayerCol <- namePlayerCol %>% getElement("namePlayerCol")
-  # 
-  # # print(namePlayerCol)
-
+  # Add year_team
   nba_tbl[i, "year_team"] <- year_team
-  nba_tbl[i, "fn3ltr"] <- str_sub(as.character(namePlayerCol), end = 3)
 
 }
 
@@ -304,14 +301,9 @@ nba_tbl
 
 ```
 
-```{r}
-
-nba_college_tbl <- left_join(nba_by_year_team, yr_college_tbl, by = c("namePlayerCol" = "Player"))
-
-```
 
 
-```{r}
+```{r Orginal NBA & College data merge}
 # Loop through nba names tbl, use year team map to find players stats
 yr_college_list <- list(keys(lineups_hash))
 
@@ -333,10 +325,9 @@ nba_college_tbl
 
 
 
-```{r}
+```{r Round 1: Create NA tibble where GP is NA}
 
 round1_nan_tbl <- nba_college_tbl[is.na(nba_college_tbl$GP),]
-
 round1_nan_tbl <- round1_nan_tbl %>% select(c(1:10)) 
 
 round1_nan_tbl
@@ -347,7 +338,7 @@ round1_nan_tbl
 
 
 
-```{r}
+```{r Round 1: Filling in NA values - using namePlayerCol_2 (removed suffixes i.e. JR, SR, etc.)}
 
 datalist = list()
 round1_nan_list <- list(round1_nan_tbl$year_team)
@@ -368,7 +359,7 @@ round1_nan_tbl_fill
 
 
 
-```{r}
+```{r Round 2: Create NA tibble where GP is NA}
 round2_nan_tbl <- round1_nan_tbl_fill[is.na(round1_nan_tbl_fill$GP),]
 round2_nan_tbl <- round2_nan_tbl %>% select(c(1:10)) 
 
@@ -376,7 +367,7 @@ round2_nan_tbl
 ```
 
 
-```{r}
+```{r Round 2: Filling in NA values - using lastname}
 datalist = list()
 round2_nan_list <- list(round2_nan_tbl$year_team)
 
@@ -401,12 +392,14 @@ round2_nan_tbl_fill
 
 
 
-```{r}
+```{r Combine non-nan data}
 
+# Exclude NA rows were GP is NA 
 og_filled <- nba_college_tbl[!is.na(nba_college_tbl$GP),]
 round1_filled <- round1_nan_tbl_fill[!is.na(round1_nan_tbl_fill$GP),]
 round2_filled <- round2_nan_tbl_fill[!is.na(round2_nan_tbl_fill$GP),]
 
+# Combinding tibbles
 datalist = list(og_filled, round1_filled, round2_filled)
 final_tbl = do.call(rbind, datalist)
 
@@ -416,9 +409,24 @@ final_tbl <- as_tibble(final_tbl) %>% select(-c(Team.y, year.y))
 # Renam columns Team.x & year.x
 final_tbl <- final_tbl %>% rename(college_team = Team.x, college_year = year.x)
 
-write_excel_csv(final_tbl, "final_tbl.csv")
 final_tbl
 ```
 
 
+```{r Check for duplicates}
+final_tbl %>% 
+  group_by(namePlayer) %>% 
+  filter(n()>1)
+```
+
+
+```{r Remove duplicates}
+final_tbl <- final_tbl[!duplicated(final_tbl$namePlayer), ]
+```
+
+
+```{r Save to csv}
+# Save final_tbl to csv
+write_excel_csv(final_tbl, "final_tbl.csv")
+```
 
