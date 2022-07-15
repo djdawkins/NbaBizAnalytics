@@ -1,0 +1,290 @@
+---
+title: "nbaProject"
+output: html_document
+date: '2022-07-08'
+---
+
+```{r setup, include=FALSE}
+library(ggplot2)
+library(caret)
+library(tidyverse)
+library(nbastatR)
+library(bigballR)
+library(hash)
+require(nnet)
+suppressPackageStartupMessages(library(tidyverse))
+suppressPackageStartupMessages(library(highcharter))
+```
+
+
+
+
+
+
+
+```{r}
+final_tbl <- read.csv("final_tbl.csv")
+final_tbl$AVCategory <- as.factor(final_tbl$AVCategory)
+final_tbl$groupPosition <- as.factor(final_tbl$groupPosition)
+final_tbl$college_year <- as.factor(final_tbl$college_year)
+final_tbl$AVCategory[is.na(final_tbl$AVCategory)] <- 'Low'
+final_tbl$Average_AV[is.na(final_tbl$Average_AV)] <- 0
+final_tbl <- final_tbl[, !sapply(final_tbl, is.character)]
+dt = sort(sample(nrow(final_tbl), nrow(final_tbl)*.7))
+train<-final_tbl[dt,]
+test<-final_tbl[-dt,]
+summary(train)
+```
+```{r}
+stpModel=step(multinom(data=train, AVCategory~.), trace=0, steps=30, direction = 'backward')
+stpSummary <- summary(stpModel)
+stpSummary 
+
+```
+
+
+```{r}
+model <- multinom(formula = AVCategory ~ Average_AV + GS + PTS + DRB + 
+    AST + STL + BLK + TOV + PF + TS. + FGM + FGA + FG. + TPM + 
+    TPA + TP. + FTM + FTA + FT. + RIMM + RIMA + RIM. + MIDM + 
+    MIDA + PBACK. + BLK_mid + pct_FGM_ast + pct_TPM_ast + pct_RIMM_ast + 
+    PTS_trans + DRB_trans + STL_trans + eFG._trans + FGM_trans + 
+    FGA_trans + TPM_trans + TPA_trans + TP._trans + FTM_trans + 
+    FTA_trans + FT._trans + RIMM_trans + RIMA_trans + RIM._trans + 
+    MIDM_trans + MIDA_trans + PTS_half + ORB_half + DRB_half + 
+    AST_half + STL_half + BLK_half + TOV_half + TS._half + eFG._half + 
+    FGM_half + FGA_half + FG._half + TPM_half + TPA_half + FTM_half + 
+    FTA_half + RIMM_half + RIMA_half + RIM._half + MIDM_half + 
+    MIDA_half + MID._half + PTS_ast + FGM_ast + TPM_ast + RIMM_ast + 
+    MIDM_ast + PTS_unast + eFG._unast + FGM_unast + FGA_unast + 
+    TPM_unast + TPA_unast + TP._unast + RIMM_unast + RIMA_unast + 
+    MIDM_unast + MIDA_unast, data = train)
+summary(model)
+
+
+z <- summary(model)$coefficients/summary(model)$standard.errors
+z
+
+# 2-tailed z test
+p <- (1 - pnorm(abs(z), 0, 1)) * 2
+p
+```
+
+```{r}
+p1 <- predict(model, test)
+predictions <- cbind(test, p1)
+predictions
+
+```
+##########################################################################################################DO NOT RUN College Data feed TAKES 24 HOURS#####################################################################################################################
+```{r}
+yrmin1 <- format(seq.Date(Sys.Date(), length=2, by='-1 year')[2], '%Y')
+yr <- format(Sys.Date(), '%Y')
+yr <- substr(yr,3,4)
+tmp = paste(yrmin1, yr, sep = '-')
+
+#schedule <- get_team_schedule(season = tmp, team.name = teamids$Team)
+#play_by_play <- get_play_by_play(schedule$Game_ID)
+# Generate all lineups and stats from the play by play
+#lineups <- get_player_stats(play_by_play_data = play_by_play, multi.games=FALSE)
+teamids <- teamids[!duplicated(teamids$Team), ]
+teamids <- subset(teamids, Team !="Savannah St.")
+teamids <- subset(teamids, Team !="LIU Brooklyn")
+
+library(hash)
+# Create year_team
+ lineups_hash <- hash()
+# Loop through yr team tibble
+ for(i in 1:nrow(teamids)){
+#   
+#   # Get year value
+   year <- tmp
+
+#   # GEt team value
+   team <- teamids[i,"Team"]
+   team <- team %>% getElement("Team")
+#   
+#   # Create year_team value
+   year_team <- paste0(year, team)
+   print(year_team)
+#   
+#   # Get schedule data
+   schedule <- get_team_schedule(season = year, team.name = team)
+#   
+#   # Get play by play for all games played so far in season
+   play_by_play <- get_play_by_play(schedule$Game_ID)
+# 
+#   # Generate all lineups and stats from the play by play
+   lineups <- get_player_stats(play_by_play_data = play_by_play, multi.games=TRUE)
+#   
+#   # Filter on Team
+   lineups <- lineups %>% filter(Team == team)
+#   # Add year column
+   lineups$year <- year
+#   
+#   # Set hash key and save lineups tibble
+   lineups_hash[[year_team]] <- lineups
+# 
+ }
+
+```
+########################################################################################################## DO NOT RUN College Data feed TAKES 24 HOUR#####################################################################################################################
+```{r}
+library(jsonlite)
+# 
+# # Convert lineups hash to list
+lineups_list <- list(values(lineups_hash))
+# # Convert list to JSON
+lineups_json = toJSON(lineups_list, pretty = TRUE, auto_unbox = TRUE)
+
+#write(lineups_json, "all_lineups.json")
+
+college_data <- fromJSON(lineups_json)
+
+
+```
+```{r}
+college_names <- college_data[[1]][[1]]
+college_names <- do.call(c, college_names)
+college_names_tbl <- tibble(namePlayer = unlist(college_names))
+college_names_tbl
+# address periods and JR in front of strings and add 3 letter row
+```
+```{r College data}
+# Loop through nba names tbl, use year team map to find players stats
+yr_college_list <- list(keys(lineups_hash))
+datalist = list()
+for(i in 1:length(unlist(yr_college_list))){
+  
+  yr_college <- yr_college_list[[1]][i]
+  yr_college_tbl <- lineups_hash[[yr_college]]
+
+  
+  datalist[[i]] <- yr_college_tbl # add it to your list
+}
+yr_college_tbl = do.call(rbind, datalist)
+yr_college_tbl
+```
+
+```{r}
+library(hash)
+teamids <- teamids %>% filter(Season == tmp)
+# Create year_team
+ positions_hash <- hash()
+# Loop through yr team tibble
+ for(i in 1:nrow(teamids)){
+#   
+#   # Get year value
+   year <- tmp
+
+#   # GEt team value
+   team <- teamids[i,"Team"]
+   team <- team %>% getElement("Team")
+#   
+#   # Create year_team value
+   year_team <- paste0(year, team)
+   print(year_team)
+#
+   
+   lineups <- get_team_roster(season = year, team.name = team)
+#   
+#   # Set hash key and save lineups tibble
+   positions_hash[[year_team]] <- lineups
+# 
+ }
+
+ 
+positions_list <- list(keys(positions_hash))
+datalist = list()
+for(i in 1:length(unlist(positions_list))){
+  
+  positions_college <- positions_list[[1]][i]
+  positions_tbl <- positions_hash[[positions_college]]
+
+  
+  datalist[[i]] <- positions_tbl # add it to your list
+  
+}
+
+
+positions_tbl = do.call(rbind, datalist)
+
+positions_tbl <- positions_tbl %>% rename(namePlayer = Player)
+
+positions_tbl %>% 
+  group_by(namePlayer) %>% 
+  filter(n()>1)
+positions_tbl <- positions_tbl[!duplicated(positions_tbl$namePlayer), ]
+
+
+
+
+
+positions_tbl <- positions_tbl %>% mutate(namePlayer = str_replace_all(namePlayer, fixed("'"), ""))
+positions_tbl <- positions_tbl %>% mutate(namePlayer = str_replace_all(namePlayer, fixed("."), " "))
+positions_tbl <- positions_tbl %>% mutate(namePlayer = toupper(namePlayer))
+```
+```{r}
+final_tbl <- yr_college_tbl %>% rename(college_team = Team, college_year = year, namePlayer = Player)
+
+final_tbl %>% 
+  group_by(namePlayer) %>% 
+  filter(n()>1)
+final_tbl <- final_tbl[!duplicated(final_tbl$namePlayer), ]
+
+
+
+
+#final_tbl <- final_tbl %>% mutate(namePlayerCol = namePlayer)
+final_tbl <- final_tbl %>% mutate(namePlayer = str_replace_all(namePlayer, fixed("'"), ""))
+#final_tbl <- final_tbl %>% mutate(namePlayerCol = str_replace_all(namePlayerCol, fixed("-"), ""))
+#final_tbl <- final_tbl %>% mutate(namePlayerCol = str_replace_all(namePlayerCol, fixed("."), ""))
+final_tbl <- final_tbl %>% mutate(namePlayer = str_replace_all(namePlayer, fixed("."), " "))
+final_tbl <- final_tbl %>% mutate(namePlayer = toupper(namePlayer))
+# Create namePlayerCol_2 column, then remove suffixes from names
+final_tbl <- final_tbl %>% mutate(namePlayer = str_replace_all(namePlayer, fixed("SR"), ""))
+final_tbl <- final_tbl %>% mutate(namePlayer = str_replace_all(namePlayer, fixed("JR"), ""))
+final_tbl <- final_tbl %>% mutate(namePlayer = str_replace_all(namePlayer, fixed("III"), ""))
+final_tbl <- final_tbl %>% mutate(namePlayer = str_replace_all(namePlayer, fixed("II"), ""))
+final_tbl <- final_tbl %>% mutate(namePlayer = str_replace_all(namePlayer, fixed("IV"), ""))
+final_tbl
+
+write_excel_csv(final_tbl, "current_collegePlayers.csv")
+```
+```{r}
+# Credit
+final_tbl <- read.csv("current_collegePlayers.csv")
+
+final_tbl$namePlayer <- final_tbl$ï..namePlayer
+
+final_tbl$TRB <- final_tbl$ORB + final_tbl$DRB
+final_tbl$credit <- (final_tbl$PTS + final_tbl$TRB + final_tbl$AST + final_tbl$STL + final_tbl$BLK) - (final_tbl$FGA - final_tbl$FGM) - (final_tbl$FTA - final_tbl$FTM) - final_tbl$TOV
+# AV
+final_tbl$Average_AV <- (final_tbl$credit**(0.75))/21
+final_tbl$Average_AV[is.na(final_tbl$Average_AV)] <- 0
+
+final_tbl <- inner_join(final_tbl, positions_tbl, by = "namePlayer")
+
+
+
+
+Predicted_AV <- predict(model, final_tbl)
+predictions <- cbind(final_tbl, Predicted_AV)
+predictions
+```
+```{r}
+
+hchart(predictions, "scatter", hcaes(x="Predicted_AV", y="Average_AV", group="Pos", name="namePlayer", Predicted_AV="Predicted_AV", Average_AV="Average_AV", minutes="MINS")) %>%
+  hc_tooltip(pointFormat = "<b>{point.name}</b><br />Predicted_AV: {point.Predicted_AV}<br />Average_AV: {point.Average_AV}<br />Average Minutes: {point.minutes}") %>%
+  hc_title(text="Offensive Rating vs. Offensive Box Plus Minus") %>%
+  hc_subtitle(text="NBA 2021-22") %>%
+  hc_credits(enabled = TRUE,
+             text = "data via nbastatR",
+             style = list(
+               fontSize = "10px"
+               )
+             ) %>%
+  hc_chart(zoomType="xy") %>%
+  hc_add_theme(hc_theme_elementary())
+```
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
