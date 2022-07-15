@@ -59,10 +59,7 @@ college_data <- fromJSON(lineups_json)
 
 
 
-college_names <- college_data[[1]][[1]]
-college_names <- do.call(c, college_names)
-college_names_tbl <- tibble(namePlayer = unlist(college_names))
-college_names_tbl
+
 # address periods and JR in front of strings and add 3 letter row
 
 
