@@ -12,6 +12,8 @@ library(nbastatR)
 library(bigballR)
 library(hash)
 require(nnet)
+library(dplyr)
+library(randomForest)
 suppressPackageStartupMessages(library(tidyverse))
 suppressPackageStartupMessages(library(highcharter))
 ```
@@ -29,12 +31,45 @@ final_tbl$groupPosition <- as.factor(final_tbl$groupPosition)
 final_tbl$college_year <- as.factor(final_tbl$college_year)
 final_tbl$AVCategory[is.na(final_tbl$AVCategory)] <- 'Low'
 final_tbl$Average_AV[is.na(final_tbl$Average_AV)] <- 0
-final_tbl <- final_tbl[, !sapply(final_tbl, is.character)]
+final_tbl$namePlayer <- final_tbl$ï..namePlayer
+
+final_tbl <- final_tbl %>% select(-c('Team', 'year', 'firstNameNba', 'lastNameNba', 'firstNameCol', 'namePlayerCol', 'namePlayerCol_2', 'year_team', 'ï..namePlayer'))
+final_tbl[is.na(final_tbl)] <- 0
+
+#final_tbl <- final_tbl[, !sapply(final_tbl, is.character)]
 dt = sort(sample(nrow(final_tbl), nrow(final_tbl)*.7))
 train<-final_tbl[dt,]
 test<-final_tbl[-dt,]
 summary(train)
 ```
+```{r}
+summary(final_tbl)
+```
+```{r}
+set.seed(120)  # Setting seed
+classifier_RF = randomForest(x = train[-5],
+                             y = train$AVCategory,
+                             ntree = 500)
+
+classifier_RF
+
+y_pred = predict(classifier_RF, newdata = test[-5])
+
+
+# Confusion Matrix
+confusion_mtx = table(test[, 5], y_pred)
+confusion_mtx
+  
+# Plotting model
+plot(classifier_RF)
+  
+# Importance plot
+importance(classifier_RF)
+  
+# Variable importance plot
+varImpPlot(classifier_RF)
+```
+
 ```{r}
 stpModel=step(multinom(data=train, AVCategory~.), trace=0, steps=30, direction = 'backward')
 stpSummary <- summary(stpModel)
@@ -76,7 +111,7 @@ predictions <- cbind(test, p1)
 predictions
 
 ```
-##########################################################################################################DO NOT RUN College Data feed TAKES 24 HOURS#####################################################################################################################
+##########################################################################################################DO NOT RUN College Data feed TAKES 24 HRs #####################################################################################################################
 ```{r}
 yrmin1 <- format(seq.Date(Sys.Date(), length=2, by='-1 year')[2], '%Y')
 yr <- format(Sys.Date(), '%Y')
@@ -87,9 +122,7 @@ tmp = paste(yrmin1, yr, sep = '-')
 #play_by_play <- get_play_by_play(schedule$Game_ID)
 # Generate all lineups and stats from the play by play
 #lineups <- get_player_stats(play_by_play_data = play_by_play, multi.games=FALSE)
-teamids <- teamids[!duplicated(teamids$Team), ]
-teamids <- subset(teamids, Team !="Savannah St.")
-teamids <- subset(teamids, Team !="LIU Brooklyn")
+teamids <- teamids %>% filter(Season == tmp)
 
 library(hash)
 # Create year_team
@@ -128,7 +161,7 @@ library(hash)
  }
 
 ```
-########################################################################################################## DO NOT RUN College Data feed TAKES 24 HOUR#####################################################################################################################
+########################################################################################################## DO NOT RUN College Data feed TAKES 24 HRs #####################################################################################################################
 ```{r}
 library(jsonlite)
 # 
@@ -254,7 +287,7 @@ write_excel_csv(final_tbl, "current_collegePlayers.csv")
 ```{r}
 # Credit
 final_tbl <- read.csv("current_collegePlayers.csv")
-
+final_tbl[is.na(final_tbl)] <- 0
 final_tbl$namePlayer <- final_tbl$ï..namePlayer
 
 final_tbl$TRB <- final_tbl$ORB + final_tbl$DRB
@@ -265,12 +298,20 @@ final_tbl$Average_AV[is.na(final_tbl$Average_AV)] <- 0
 
 final_tbl <- inner_join(final_tbl, positions_tbl, by = "namePlayer")
 
-
+final_tbl$groupPosition <- as.factor(final_tbl$Pos)
+final_tbl$college_year <- as.factor(final_tbl$college_year)
 
 
 Predicted_AV <- predict(model, final_tbl)
 predictions <- cbind(final_tbl, Predicted_AV)
 predictions
+```
+```{r}
+final_tbl <- final_tbl %>% select(-c('ï..namePlayer'))
+
+
+final_tbl[is.na(final_tbl)] <- 0
+y_pred = predict(classifier_RF, newdata = final_tbl)
 ```
 ```{r}
 
