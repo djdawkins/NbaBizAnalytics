@@ -91,7 +91,7 @@ ggplot(all_cohorts, aes(x=groupPosition, y=Average_AV)) + geom_point()
 
 
 ```{r Get mean for all cohorts}
-full_tbl <- merge(df_salaries, bref_stats, by = "namePlayer")
+# full_tbl <- merge(df_salaries, bref_stats, by = "namePlayer")
 
 print(mean(na.omit(all_cohorts$Average_AV)))
 print(mean(na.omit(all_cohorts$Average_AV))*2)
