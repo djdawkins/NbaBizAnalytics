@@ -6,7 +6,7 @@ date: '2022-06-13'
 
 ```{r setup, include=FALSE}
 library(ggplot2)
-library(caret)
+# library(caret)
 library(tidyverse)
 library(nbastatR)
 suppressPackageStartupMessages(library(tidyverse))
@@ -429,4 +429,7 @@ final_tbl <- final_tbl[!duplicated(final_tbl$namePlayer), ]
 # Save final_tbl to csv
 write_excel_csv(final_tbl, "final_tbl.csv")
 ```
+
+
+
 
