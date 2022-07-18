@@ -1,0 +1,126 @@
+---
+title: "nbaModels"
+output: html_document
+date: '2022-07-18'
+---
+
+
+
+```{r setup, include=FALSE}
+library(ggplot2)
+library(tidyverse)
+library(dplyr)
+library(randomForest)
+suppressPackageStartupMessages(library(tidyverse))
+```
+
+
+
+```{r}
+final_tbl <- read.csv("../final_tbl.csv")
+
+final_tbl$AVCategory <- as.factor(final_tbl$AVCategory)
+final_tbl$groupPosition <- as.factor(final_tbl$groupPosition)
+final_tbl$college_year <- as.factor(final_tbl$college_year)
+
+final_tbl$AVCategory[is.na(final_tbl$AVCategory)] <- 'Low'
+final_tbl$Average_AV[is.na(final_tbl$Average_AV)] <- 0
+
+final_tbl <- rename(final_tbl, namePlayer = ï..namePlayer)
+
+final_tbl <- final_tbl %>% select(-c('Team', 'year', 'firstNameNba', 'lastNameNba', 'firstNameCol', 'namePlayerCol', 'namePlayerCol_2', 'year_team', 'groupPosition', 'college_year'))
+
+final_tbl[is.na(final_tbl)] <- 0
+
+head(final_tbl)
+```
+
+
+
+```{r}
+current_college_players <- read.csv("../current_collegePlayers.csv")
+current_college_players <- as_tibble(current_college_players)
+current_college_players <- rename(current_college_players, namePlayer = ï..namePlayer)
+
+# Credit
+current_college_players[is.na(current_college_players)] <- 0
+
+current_college_players$credit <- (current_college_players$PTS + current_college_players$ORB + current_college_players$DRB + current_college_players$AST + current_college_players$STL + current_college_players$BLK) - (current_college_players$FGA - current_college_players$FGM) - (current_college_players$FTA - current_college_players$FTM) - current_college_players$TOV
+
+# AV
+current_college_players$Average_AV <- (current_college_players$credit**(0.75))/21
+current_college_players$Average_AV[is.na(current_college_players$Average_AV)] <- 0
+
+current_college_players$college_year <- as.factor(current_college_players$college_year)
+
+current_college_players <- current_college_players %>% select(-c('credit', 'college_year'))
+
+head(current_college_players)
+write.csv(current_college_players, "appData.csv", row.names = FALSE)
+```
+
+
+
+```{r}
+# Train and Test data
+dt = sort(sample(nrow(final_tbl), nrow(final_tbl)*.7))
+train<-final_tbl[dt,]
+test<-final_tbl[-dt,]
+```
+
+
+
+```{r}
+set.seed(120)  # Setting seed
+classifier_RF <- randomForest(x = train[-3],y = train$AVCategory, ntree = 500)
+
+y_pred = predict(classifier_RF, newdata = test[-3])
+
+# Confusion Matrix
+confusion_mtx = table(test[, 3], y_pred)
+confusion_mtx
+
+# Plotting model
+plot(classifier_RF)
+
+# Importance plot
+importance(classifier_RF)
+
+# Variable importance plot
+varImpPlot(classifier_RF)
+```
+
+
+
+```{r}
+# Save random forrest model
+save(classifier_RF, file = "nbaRandomForrestModel.RData")
+```
+
+
+
+```{r}
+# Load saved random forest model
+loaded_rf <- get(load("nbaRandomForrestModel.RData"))
+print(loaded_rf)
+```
+
+
+
+```{r}
+# Predict on test set
+y_pred = predict(loaded_rf, newdata = test[-3])
+
+# Confusion Matrix
+confusion_mtx = table(test[, 3], y_pred)
+confusion_mtx
+```
+
+
+
+```{r}
+# Predict on current college players
+y_pred = predict(loaded_rf, newdata = current_college_players[1,])
+
+y_pred
+```
